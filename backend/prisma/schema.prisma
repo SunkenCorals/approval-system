@@ -1,0 +1,71 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Approval {
+  id             Int            @id @default(autoincrement())
+  serialNo       String         @unique
+  projectName    String
+  content        String
+  departmentPath String
+  departmentIds  String // JSON string
+  executeDate    DateTime
+
+  status       String   @default("PENDING")
+  creatorId    String
+  creatorName  String
+  approverId   String?
+  approverName String?
+
+  rejectReason String?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  approvedAt DateTime?
+  deleted    Boolean   @default(false)
+
+  attachments Attachment[]
+
+  @@index([status, createdAt])
+  @@index([creatorId])
+}
+
+model Attachment {
+  id         Int      @id @default(autoincrement())
+  approvalId Int
+  type       String // IMAGE | EXCEL
+  filename   String
+  path       String
+  mimeType   String
+  size       Int
+  createdAt  DateTime @default(now())
+
+  approval Approval @relation(fields: [approvalId], references: [id])
+
+  @@index([approvalId])
+}
+
+model FormConfig {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  schema    String // JSON string
+  remark    String?
+  updatedAt DateTime @updatedAt
+}
+
+model Department {
+  id        String   @id
+  name      String
+  parentId  String?
+  level     Int
+  path      String
+  createdAt DateTime @default(now())
+}

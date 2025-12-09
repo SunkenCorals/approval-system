@@ -1,0 +1,43 @@
+.detail-content {
+  white-space: pre-wrap;
+}
+
+.attachments-section {
+  margin-top: 24px;
+}
+
+.attachment-image-wrapper {
+  border: 1px solid #eee;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.attachment-image {
+  object-fit: cover;
+}
+
+.no-attachments {
+  color: #999;
+}
+
+.timeline-section {
+  margin-top: 32px;
+}
+
+.timeline-card {
+  background: #fafafa;
+}
+
+.timeline-item-title {
+  margin-bottom: 0;
+}
+
+.timeline-item-time {
+  color: #999;
+  font-size: 12px;
+}
+
+.timeline-reject-reason {
+  color: red;
+  font-size: 12px;
+}

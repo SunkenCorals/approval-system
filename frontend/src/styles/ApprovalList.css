@@ -1,0 +1,44 @@
+.filter-card {
+  margin-bottom: 24px;
+}
+
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.filter-title {
+  margin: 0 !important;
+}
+
+.filter-form-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.filter-form {
+  row-gap: 16px;
+  flex: 1;
+}
+
+.project-input {
+  width: 150px;
+}
+
+.date-range-picker {
+  width: 240px;
+}
+
+.serial-no-link {
+  font-family: monospace;
+  cursor: pointer;
+}
+
+.action-view-detail {
+  color: rgba(0, 0, 0, 0.25);
+}
