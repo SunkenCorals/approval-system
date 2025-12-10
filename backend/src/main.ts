@@ -26,6 +26,13 @@ async function bootstrap() {
   // 全局响应拦截器
   app.useGlobalInterceptors(new TransformInterceptor());
 
+  // 开启 CORS
+  app.enableCors({
+    origin: '*', // 在生产环境建议设置为具体的前端域名
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+
   await app.listen(3001);
   console.log('Server is running on http://localhost:3001');
 }
