@@ -26,6 +26,9 @@ async function bootstrap() {
   // 全局响应拦截器
   app.useGlobalInterceptors(new TransformInterceptor());
 
+  // 允许跨域
+  app.enableCors();
+
   await app.listen(3001);
   console.log('Server is running on http://localhost:3001');
 }
