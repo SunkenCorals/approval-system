@@ -37,30 +37,40 @@
 
 ---
 
-## 3. 核心功能设计与实现 (详细说明)
+## 3. 核心功能设计与实现 
 
-### 3.1 审批流转状态机 (FSM)
+### 3.1 审批流转状态机 (FSM) 与权限控制
 
-系统核心流转逻辑基于严格的**有限状态机 (Finite State Machine)** 设计，以确保业务数据的强一致性，杜绝非法状态跃迁。
+审批系统的核心在于对单据状态的严格管控。我们设计了一个**确定性的有限状态机 (Deterministic FSM)**，并结合**RBAC (Role-Based Access Control)** 权限模型，确保每一笔单据的流转都是可追溯、合规且不可篡改的。
 
-**状态定义：**
-*   `PENDING` (待审批): 初始状态。仅在此状态下，申请人可撤回/修改，审批人可审批。
-*   `APPROVED` (已通过): 终态。审批人通过后进入，不可逆。
-*   `REJECTED` (已驳回): 终态。审批人驳回后进入。支持“重新编辑”机制，编辑后生成新单据或状态重置为 PENDING。
-*   `WITHDRAWN` (已撤回): 终态。申请人主动撤回。同样支持重新编辑。
+#### 1. 状态定义与流转规则
 
-**流转逻辑图：**
+系统定义了 4 种标准状态，并严格限制了状态间的流转路径：
+
+| 状态 | 描述 | 类型 | 下一合法状态 |
+| :--- | :--- | :--- | :--- |
+| **PENDING** | 待审批 | 初始态 | APPROVED, REJECTED, WITHDRAWN |
+| **APPROVED** | 已通过 | 终态 | - (不可流转) |
+| **REJECTED** | 已驳回 | 终态 | PENDING (仅限重新提交) |
+| **WITHDRAWN** | 已撤回 | 终态 | PENDING (仅限重新提交) |
+
+#### 2. 状态流转图
 
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: 提交申请
-    PENDING --> APPROVED: 审批人通过
-    PENDING --> REJECTED: 审批人驳回
-    PENDING --> WITHDRAWN: 申请人主动撤回
+    
+    state PENDING {
+        [*] --> 等待审批
+    }
+
+    PENDING --> APPROVED: 审批通过 (审批人)
+    PENDING --> REJECTED: 审批驳回 (审批人)
+    PENDING --> WITHDRAWN: 主动撤回 (申请人)
     
     note right of REJECTED
       单据被驳回后，申请人可修正信息
-      重新提交，单据回到 PENDING 状态
+      重新提交，单据生成新版本并回到 PENDING
     end note
     
     REJECTED --> PENDING: 修正后重新提交
@@ -68,20 +78,36 @@ stateDiagram-v2
     APPROVED --> [*]
 ```
 
-**关键实现细节：**
-*   **原子性操作**：所有状态变更均在 Prisma 事务中执行，确保状态更新与流转日志写入的原子性。
-*   **乐观锁控制**：在并发审批场景下，利用版本号或数据库锁机制（当前版本依赖数据库事务隔离级别）防止重复审批。
+#### 3. 权限控制矩阵
 
-### 3.2 动态表单引擎 (Dynamic Form Engine) - Server-Driven UI
+系统通过 `ApprovalService.validatePermission` 实现了方法级的权限拦截：
 
-为了应对企业审批中表单类型繁多（如请假、报销、采购等字段各异）的痛点，系统实现了一套**后端驱动**的动态表单引擎。
+| 动作 | 触发角色 | 前置条件 | 业务逻辑校验 |
+| :--- | :--- | :--- | :--- |
+| **Withdraw** (撤回) | 申请人 | 单据状态必须为 `PENDING` | 必须是本人创建的单据 |
+| **Approve** (通过) | 审批人 | 单据状态必须为 `PENDING` | **不可审批自己提交的单据** (防自批) |
+| **Reject** (驳回) | 审批人 | 单据状态必须为 `PENDING` | 必须填写驳回理由 |
+| **Update** (修改) | 申请人 | 单据状态为 `PENDING` / `REJECTED` / `WITHDRAWN` | 仅本人可修改 |
 
-**设计原理：**
-1.  **Schema 定义**：后端 `FormConfig` 表存储 JSON 格式的表单定义，而非硬编码在前端。
-2.  **协议映射**：前端通过 `DynamicForm` 组件，将后端 Schema 映射为 Antd Form Item。
-3.  **校验注入**：后端定义的校验规则（如 `required`, `maxCount`, `regex`）在前端自动转化为 Async Validator，实现了**一次定义，双端校验**。
+#### 4. 关键技术实现
 
-**Schema 数据结构示例：**
+*   **事务一致性 (Transactional Integrity)**: 使用 `prisma.$transaction` 确保状态变更与操作日志（Action Log）写入的原子性，避免出现"状态变了但没记录"的脏数据。
+*   **并发控制 (Concurrency Control)**: 在高并发场景下（如申请人撤回的同时审批人点击通过），利用数据库事务隔离级别（Database Isolation Level）确保只有一个操作能生效，防止状态跃迁冲突。
+
+---
+
+### 3.2 服务端驱动的动态表单引擎 (Server-Driven UI)
+
+传统的表单开发模式（前端硬编码）难以应对灵活多变的企业审批场景（如请假、报销、采购单字段各异）。本项目实现了一套基于 **JSON Schema** 的动态渲染引擎，实现了“后端定义，前端渲染”的解耦架构。
+
+#### 1. 架构设计原理
+
+*   **Schema Definition (定义层)**: 后端 `FormConfig` 表存储字段元数据（类型、标签、校验规则）。
+*   **Component Registry (渲染层)**: 前端维护一个组件映射表 (Map)，根据 Schema 中的 `component` 字段动态加载 `Input`, `DatePicker`, `DepartmentSelect` 等组件。
+*   **Validator Adapter (校验适配层)**: 后端定义的 `class-validator` 规则（如 `required`, `maxCount`）在前端自动转化为 Ant Design Form 支持的 `Rule` 对象，实现了**前后端校验逻辑的同构**。
+
+#### 2. Schema 数据结构示例
+
 ```json
 [
   {
@@ -89,7 +115,11 @@ stateDiagram-v2
     "name": "项目名称",
     "component": "Input",
     "props": { "placeholder": "请输入项目名称" },
-    "validator": { "required": true, "maxCount": 50, "message": "项目名称必填且不超过50字" }
+    "validator": { 
+      "required": true, 
+      "maxCount": 50, 
+      "message": "项目名称必填且不超过50字" 
+    }
   },
   {
     "field": "departmentIds",
@@ -100,25 +130,11 @@ stateDiagram-v2
 ]
 ```
 
-### 3.3 交互体验与工程化实践
+#### 3. 核心优势
 
-本项目在实现功能的同时，极度重视**用户体验 (UX)** 与**代码可维护性 (DX)**。
-
-1.  **交互设计：状态可感知 (State Awareness)**
-    *   **痛点**：传统表格在无权限时直接隐藏按钮，用户困惑“为什么我不能操作？”。
-    *   **优化**：实现了**“操作按钮常驻 + 禁用提示”**模式。
-    *   **实现**：`ApprovalTable` 组件内部封装了状态判断逻辑。当用户对已通过单据尝试撤回时，按钮置灰并显示 Tooltip：“审批已通过，单据不可撤回”。这显著降低了用户的认知负荷。
-
-2.  **CSS 架构重构：关注点分离**
-    *   **痛点**：早期开发中大量使用内联样式 (`style={{ marginTop: 20 }}`), 导致 JSX 臃肿，样式复用困难。
-    *   **优化**：建立 `src/styles` 目录，按页面/组件维度拆分 CSS 文件。
-    *   **收益**：
-        *   JSX 代码行数减少约 30%，逻辑结构更清晰。
-        *   样式统一管理，方便后续进行 Dark Mode 适配或主题色变更。
-
-3.  **性能优化：部门树的高效渲染**
-    *   **场景**：部门选择器 (`DepartmentSelect`) 需要加载全量组织架构树。
-    *   **优化**：利用 **TanStack Query** 的缓存机制。首次加载后，数据驻留内存，后续切换页面或多次打开弹窗时实现**零延迟渲染**，避免了重复的 API 调用。
+1.  **热更新能力**: 调整表单字段（如增加“预算金额”字段）只需更新数据库配置，无需重新部署前端代码。
+2.  **多端一致性**: 同一套 Schema 可同时被 Web 端、移动端甚至小程序端消费，保证了 UI 和校验规则的一致性。
+3.  **可扩展性**: 新增一种表单类型只需在数据库插入一条 Config 记录，系统自动支持。
 
 ---
 
@@ -220,7 +236,7 @@ npm run dev
 *   **前端**: 部署在 Vercel Edge Network，通过 Rewrite 规则支持 SPA 路由。
 *   **后端**: 部署为 Vercel Serverless Function (Node.js)，通过 `/api` 路由处理请求。
 *   **数据库**: 使用 **Neon (Serverless Postgres)**，实现了计算与存储的分离。
-*   **文件存储**: 适配了 Vercel Serverless 环境，使用 `/tmp` 临时目录处理文件上传 (生产环境建议对接 S3)。
+*   **文件存储**: 适配了 Vercel Serverless 环境，使用 `/tmp` 临时目录处理文件上传 。
 
 **部署架构图:**
 
