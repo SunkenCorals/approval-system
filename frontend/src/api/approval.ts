@@ -8,35 +8,35 @@ const put = <T>(url: string, data?: any) => request.put(url, data) as unknown as
 
 export const approvalApi = {
   getList: (params: any) => {
-    return get<{ list: ApprovalListItem[]; total: number }>('/approvals', { params });
+    return get<{ list: ApprovalListItem[]; total: number }>('/api/approvals', { params });
   },
   getDetail: (id: number) => {
-    return get<ApprovalDetail>(`/approvals/${id}`);
+    return get<ApprovalDetail>(`/api/approvals/${id}`);
   },
   create: (data: any) => {
-    return post<{ id: number }>('/approvals', data);
+    return post<{ id: number }>('/api/approvals', data);
   },
   update: (id: number, data: any) => {
-    return put<{ id: number }>(`/approvals/${id}`, data);
+    return put<{ id: number }>(`/api/approvals/${id}`, data);
   },
   withdraw: (id: number) => {
-    return post<void>(`/approvals/${id}/withdraw`);
+    return post<void>(`/api/approvals/${id}/withdraw`);
   },
   approve: (id: number) => {
-    return post<void>(`/approvals/${id}/approve`);
+    return post<void>(`/api/approvals/${id}/approve`);
   },
   reject: (id: number, reason: string) => {
-    return post<void>(`/approvals/${id}/reject`, { reason });
+    return post<void>(`/api/approvals/${id}/reject`, { reason });
   },
   upload: (id: number, formData: FormData) => {
-    return post<any>(`/approvals/${id}/attachments`, formData, {
+    return post<any>(`/api/approvals/${id}/attachments`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
   getFormConfig: (key: string) => {
-    return get<FormConfigField[]>(`/form-configs/${key}`);
+    return get<FormConfigField[]>(`/api/form-configs/${key}`);
   },
   getDepartments: () => {
-    return get<DepartmentTreeNode[]>('/departments');
+    return get<DepartmentTreeNode[]>('/api/departments');
   },
 };
