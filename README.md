@@ -91,8 +91,23 @@ stateDiagram-v2
 
 #### 4. 关键技术实现
 
-*   **事务一致性 (Transactional Integrity)**: 使用 `prisma.$transaction` 确保状态变更与操作日志（Action Log）写入的原子性，避免出现"状态变了但没记录"的脏数据。
-*   **并发控制 (Concurrency Control)**: 在高并发场景下（如申请人撤回的同时审批人点击通过），利用数据库事务隔离级别（Database Isolation Level）确保只有一个操作能生效，防止状态跃迁冲突。
+*   **状态流转校验 (State Transition Guard)**:
+    在 `ApprovalService` 中实现了严格的校验逻辑，防止非法状态跃迁。例如，尝试从 `APPROVED` 状态再次修改会直接抛出 `BadRequestException`。
+    ```typescript
+    // backend/src/modules/approval/approval.service.ts
+    validateTransition(current: string, next: ApprovalStatus) {
+      if (current === ApprovalStatus.APPROVED || current === ApprovalStatus.REJECTED) {
+        throw new BadRequestException(`Cannot update from final status ${current}`);
+      }
+      // ... more validation logic
+    }
+    ```
+
+*   **事务一致性 (Transactional Integrity)**: 
+    使用 `prisma.$transaction` 确保状态变更与操作日志（Action Log）写入的原子性，避免出现"状态变了但没记录"的脏数据。
+
+*   **并发控制 (Concurrency Control)**: 
+    在高并发场景下（如申请人撤回的同时审批人点击通过），利用数据库事务隔离级别（Database Isolation Level）确保只有一个操作能生效，防止状态跃迁冲突。
 
 ---
 
@@ -102,9 +117,25 @@ stateDiagram-v2
 
 #### 1. 架构设计原理
 
-*   **Schema Definition (定义层)**: 后端 `FormConfig` 表存储字段元数据（类型、标签、校验规则）。
-*   **Component Registry (渲染层)**: 前端维护一个组件映射表 (Map)，根据 Schema 中的 `component` 字段动态加载 `Input`, `DatePicker`, `DepartmentSelect` 等组件。
-*   **Validator Adapter (校验适配层)**: 后端定义的 `class-validator` 规则（如 `required`, `maxCount`）在前端自动转化为 Ant Design Form 支持的 `Rule` 对象，实现了**前后端校验逻辑的同构**。
+*   **Schema Definition (定义层)**: 
+    后端 `FormConfig` 表存储字段元数据。我们不仅仅存储字段名，还存储了**组件类型** (`component`) 和**校验规则** (`validator`)。
+    > 数据库设计决策：使用 `TEXT` 或 `JSON` 类型存储 Schema，而非拆分成多张关联表，是为了最大化 Schema 结构的灵活性，支持嵌套结构和快速迭代。
+
+*   **Component Registry (渲染层)**: 
+    前端 `DynamicForm` 组件维护一个映射表，根据 Schema 动态加载组件。
+    ```tsx
+    // frontend/src/components/DynamicForm/index.tsx
+    const renderComponent = (field: FormConfigField) => {
+      switch (field.component) {
+        case 'Input': return <Input ... />;
+        case 'DepartmentSelect': return <DepartmentSelect ... />;
+        // ... 易于扩展更多组件
+      }
+    };
+    ```
+
+*   **Validator Adapter (校验适配层)**: 
+    后端定义的 `class-validator` 风格规则（如 `required`, `maxCount`）在前端自动转化为 Ant Design Form 支持的 `Rule` 对象，实现了**前后端校验逻辑的同构**。这意味着，当你修改后端的必填配置，前端的红星号 (*) 和错误提示会自动更新，无需改动前端代码。
 
 #### 2. Schema 数据结构示例
 
