@@ -21,7 +21,7 @@ export class AttachmentController {
   @UseInterceptors(
     FilesInterceptor('files', 10, {
       storage: diskStorage({
-        destination: './uploads',
+        destination: process.env.VERCEL ? '/tmp' : './uploads',
         filename: (req, file, cb) => {
           const randomName = Array(32).fill(null).map(() => (Math.round(Math.random() * 16)).toString(16)).join('');
           cb(null, `${randomName}${extname(file.originalname)}`);

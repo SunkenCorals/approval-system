@@ -10,7 +10,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   
   // 配置静态资源
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+  app.useStaticAssets(process.env.VERCEL ? '/tmp' : join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
   });
   
