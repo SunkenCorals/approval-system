@@ -2,6 +2,8 @@
 
 ## 1. 项目概述
 
+**🔴 在线演示地址**: [https://approval-system-frontend-demo.vercel.app/approval](https://approval-system-frontend-demo.vercel.app/approval)
+
 本项目是一个基于 **React (Frontend)** 和 **NestJS (Backend)** 构建的全栈审批管理系统。系统旨在解决企业内部复杂的流程审批需求，实现了从审批单发起、流转、决策到归档的全生命周期管理。
 
 项目核心采用**前后端分离**架构，引入了**动态表单引擎**、**有限状态机 (FSM)** 以及**RBAC 基础权限控制**等技术方案，确保了系统的灵活性、可扩展性与数据一致性。
@@ -208,3 +210,24 @@ npm run dev
 ```
 
 访问浏览器 `http://localhost:5173` 即可进入系统。
+
+---
+
+## 6. 部署 (Deployment)
+
+本项目已成功部署至 **Vercel**，并采用 **Serverless** 架构运行。
+
+*   **前端**: 部署在 Vercel Edge Network，通过 Rewrite 规则支持 SPA 路由。
+*   **后端**: 部署为 Vercel Serverless Function (Node.js)，通过 `/api` 路由处理请求。
+*   **数据库**: 使用 **Neon (Serverless Postgres)**，实现了计算与存储的分离。
+*   **文件存储**: 适配了 Vercel Serverless 环境，使用 `/tmp` 临时目录处理文件上传 (生产环境建议对接 S3)。
+
+**部署架构图:**
+
+```mermaid
+graph TD
+    User[用户] -->|HTTPS| Vercel[Vercel Edge Network]
+    Vercel -->|Static Assets| Frontend[React SPA]
+    Vercel -->|/api/*| Backend[NestJS Serverless Function]
+    Backend -->|TCP/SSL| DB[(Neon Postgres)]
+```
