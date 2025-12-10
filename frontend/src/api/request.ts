@@ -2,7 +2,7 @@ import axios from 'axios';
 import { message } from 'antd';
 
 const request = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: '/api',
   timeout: 10000,
 });
 
